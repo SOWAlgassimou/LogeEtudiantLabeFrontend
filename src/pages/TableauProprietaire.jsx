@@ -1,33 +1,38 @@
 import { useState, useEffect } from "react";
+import { createChambre, getChambres, deleteChambre } from "../api/chambres"; // Ajout deleteChambre
+import { getOwnerReservations, validateOwnerReservation } from "../api/reservations";
 
 function TableauProprietaire({ onglet }) {
-  const [chambres, setChambres] = useState(() => {
-    return JSON.parse(localStorage.getItem("chambres")) || [];
-  });
-
+  const [chambres, setChambres] = useState([]);
   const [formulaire, setFormulaire] = useState({ bloc: "", numero: "", prix: "", image: "" });
   const [message, setMessage] = useState("");
   const [modeEdition, setModeEdition] = useState(false);
   const [chambreEnCours, setChambreEnCours] = useState(null);
   const [messageAction, setMessageAction] = useState("");
-  const [reservationASupprimer, setReservationASupprimer] = useState(null);
+  const [reservationsProprio, setReservationsProprio] = useState([]);
+
+  const utilisateur = JSON.parse(localStorage.getItem("utilisateurConnecte"));
 
   const convertirImage = (e) => {
     const fichier = e.target.files[0];
-    const lecteur = new FileReader();
-    
-    lecteur.onloadend = () => {
-    setFormulaire({ ...formulaire, image: lecteur.result });
-    };
-
     if (fichier) {
-    lecteur.readAsDataURL(fichier);
+      setFormulaire({ ...formulaire, image: fichier });
     }
   };
-  
-  useEffect(() => {
-    localStorage.setItem("chambres", JSON.stringify(chambres));
-  }, [chambres]);
+
+  // Charger les chambres et réservations depuis l'API selon l'onglet actif
+    useEffect(() => {
+    if (onglet === "liste") {
+      getChambres()
+        .then((data) => setChambres(Array.isArray(data) ? data : []))
+        .catch(() => setMessage("Erreur lors du chargement des chambres."));
+    }
+    if (onglet === "reservations") {
+      getOwnerReservations()
+        .then((data) => setReservationsProprio(Array.isArray(data) ? data : []))
+        .catch(() => setMessage("Erreur lors du chargement des réservations."));
+    }
+  }, [onglet]);
 
   const resetFormulaire = () => {
     setFormulaire({ bloc: "", numero: "", prix: "" });
@@ -35,44 +40,58 @@ function TableauProprietaire({ onglet }) {
     setChambreEnCours(null);
   };
 
-  const gererSoumission = (e) => {
+  const gererSoumission = async (e) => {
     e.preventDefault();
     const bloc = formulaire.bloc.trim();
     const numero = formulaire.numero.trim();
+    const prix = parseInt(formulaire.prix, 10);
 
+    if (!bloc || !numero || isNaN(prix)) {
+      setMessage("❌ Remplis tous les champs correctement.");
+      setTimeout(() => setMessage(""), 3000);
+      return;
+    }
+    if (!utilisateur?._id) {
+      setMessage("❌ Impossible d’identifier le propriétaire.");
+      setTimeout(() => setMessage(""), 3000);
+      return;
+    }
+
+    // Vérifie que chambres est bien un tableau avant d'utiliser find
+    if (!Array.isArray(chambres)) {
+      setMessage("Erreur interne : liste des chambres invalide.");
+      setTimeout(() => setMessage(""), 3000);
+      return;
+    }
+
+    // Vérifie si la chambre existe déjà (doublon)
     const doublon = chambres.find(
       (ch) =>
         ch.bloc.toLowerCase() === bloc.toLowerCase() &&
         ch.numero.toLowerCase() === numero.toLowerCase() &&
-        (!modeEdition || ch.id !== chambreEnCours.id)
+        (!modeEdition || ch._id !== chambreEnCours?._id)
     );
-
     if (doublon) {
       setMessage("❌ Cette chambre existe déjà.");
+      setTimeout(() => setMessage(""), 3000);
       return;
     }
 
-    if (modeEdition) {
-      const chambresModifiees = chambres.map((ch) =>
-        ch.id === chambreEnCours.id
-          ? { ...ch, ...formulaire, prix: parseInt(formulaire.prix) }
-          : ch
-      );
-      setChambres(chambresModifiees);
-      setMessage("✅ Chambre modifiée.");
-    } else {
-      const nouvelle = {
-        id: Date.now(),
-        bloc,
-        numero,
-        prix: parseInt(formulaire.prix),
-        image: formulaire.image, // base64 string
-        disponible: true,
-        description: "Chambre ajoutée par un propriétaire.",
-        equipements: ["Électricité 24h/24", "Eau potable"],
-      };
-      setChambres([...chambres, nouvelle]);
+    try {
+      const formData = new FormData();
+      formData.append('bloc', bloc);
+      formData.append('numero', numero);
+      formData.append('prix', String(prix));
+      formData.append('proprietaire', utilisateur._id);
+      if (formulaire.image instanceof File) {
+        formData.append('image', formulaire.image);
+      }
+      await createChambre(formData);
+      // Recharge la liste depuis l'API
+      getChambres().then((data) => setChambres(Array.isArray(data) ? data : []));
       setMessage("✅ Chambre ajoutée.");
+    } catch (err) {
+      setMessage("❌ Erreur lors de l'ajout : " + (err?.response?.data?.error || err.message));
     }
 
     resetFormulaire();
@@ -85,44 +104,37 @@ function TableauProprietaire({ onglet }) {
     setChambreEnCours(ch);
   };
 
-  const supprimerChambre = (id) => {
-    const maj = chambres.filter((ch) => ch.id !== id);
-    setChambres(maj);
-    setMessage("✅ Chambre supprimée.");
+  const supprimerChambre = async (id) => {
+    try {
+      await deleteChambre(id);
+      getChambres().then((data) => setChambres(Array.isArray(data) ? data : []));
+      setMessage("✅ Chambre supprimée.");
+    } catch {
+      setMessage("❌ Erreur lors de la suppression.");
+    }
     setTimeout(() => setMessage(""), 3000);
-    if (modeEdition && chambreEnCours?.id === id) {
+    if (modeEdition && chambreEnCours?._id === id) {
       resetFormulaire();
     }
   };
 
-  // Confirmer une réservation
-  function confirmerReservation(id) {
-    const reservations = JSON.parse(localStorage.getItem("reservations")) || [];
-    const maj = reservations.map(r =>
-      r.id === id ? { ...r, statut: "confirmée" } : r
-    );
-    localStorage.setItem("reservations", JSON.stringify(maj));
-    setMessageAction("✅ Réservation confirmée !");
+  // Confirmer une réservation (API propriétaire)
+  async function confirmerReservation(id) {
+    try {
+      await validateOwnerReservation(id);
+      setMessageAction("✅ Réservation confirmée !");
+      const data = await getOwnerReservations();
+      setReservationsProprio(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setMessageAction("❌ Erreur lors de la confirmation.");
+    }
     setTimeout(() => setMessageAction(""), 2500);
-    // Pour rafraîchir sans reload :
-    window.dispatchEvent(new Event("storage"));
   }
 
-  // Supprimer une réservation et rendre la chambre dispo
-  function supprimerReservation(id, numero, bloc) {
-    // Supprimer la réservation
-    const reservations = (JSON.parse(localStorage.getItem("reservations")) || []).filter(r => r.id !== id);
-    localStorage.setItem("reservations", JSON.stringify(reservations));
-    // Rendre la chambre disponible
-    const chambres = JSON.parse(localStorage.getItem("chambres")) || [];
-    const chambresMaj = chambres.map(ch =>
-      ch.numero === numero && ch.bloc === bloc ? { ...ch, disponible: true } : ch
-    );
-    localStorage.setItem("chambres", JSON.stringify(chambresMaj));
-    setMessageAction("✅ Réservation supprimée !");
+  // Suppression d'une réservation côté propriétaire (si API disponible)
+  function supprimerReservation(id) {
+    setMessageAction("Fonction de suppression non disponible.");
     setTimeout(() => setMessageAction(""), 2500);
-    setReservationASupprimer(null);
-    window.dispatchEvent(new Event("storage"));
   }
 
   return (
@@ -190,7 +202,7 @@ function TableauProprietaire({ onglet }) {
         <ul className="space-y-2">
           {chambres.map((ch) => (
             <li
-              key={ch.id}
+              key={ch._id}
               className="bg-white p-4 rounded shadow flex justify-between items-center"
             >
               <span>
@@ -200,7 +212,7 @@ function TableauProprietaire({ onglet }) {
                 <button onClick={() => modifierChambre(ch)} className="text-blue-600 hover:underline">
                   Modifier
                 </button>
-                <button onClick={() => supprimerChambre(ch.id)} className="text-red-600 hover:underline">
+                <button onClick={() => supprimerChambre(ch._id)} className="text-red-600 hover:underline">
                   Supprimer
                 </button>
               </div>
@@ -217,23 +229,23 @@ function TableauProprietaire({ onglet }) {
             <div className="mb-4 text-green-700 font-semibold text-center">{messageAction}</div>
           )}
           <ul className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-            {(JSON.parse(localStorage.getItem("reservations")) || []).map((r, i) => (
-              <li key={r.id || i} className="border rounded p-4 shadow hover:shadow-lg bg-white" style={{minHeight: "150px"}}>
-                <p><strong>Étudiant :</strong> {r.nom}</p>
-                <p><strong>Email :</strong> {r.email}</p>
-                <p><strong>Chambre :</strong> {r.numero} – {r.bloc}</p>
-                <p><strong>Prix :</strong> {r.prix.toLocaleString()} GNF</p>
-                <p><strong>Réservée le :</strong> {new Date(r.date).toLocaleDateString()}</p>
+            {reservationsProprio.map((r, i) => (
+              <li key={r._id || i} className="border rounded p-4 shadow hover:shadow-lg bg-white" style={{minHeight: "150px"}}>
+                <p><strong>Étudiant :</strong> {r.user?.nom || r.etudiant?.nom || "-"}</p>
+                <p><strong>Email :</strong> {r.user?.email || r.etudiant?.email || "-"}</p>
+                <p><strong>Chambre :</strong> {r.chambre?.numero} – {r.chambre?.bloc}</p>
+                <p><strong>Prix :</strong> {Number(r.chambre?.prix ?? r.prix ?? 0).toLocaleString()} GNF</p>
+                <p><strong>Réservée le :</strong> {new Date(r.createdAt || r.date).toLocaleDateString()}</p>
                 <p>
                   <strong>Statut :</strong>{" "}
-                  <span className={r.statut === "confirmée" ? "text-green-600" : "text-orange-600"}>
-                    {r.statut || "en attente"}
+                  <span className={(r.statut || r.status) === "confirmée" ? "text-green-600" : "text-orange-600"}>
+                    {r.statut || r.status || "en attente"}
                   </span>
                 </p>
-                {r.image && (
+                {r.chambre?.image && (
                   <img
-                    src={r.image}
-                    alt={`Chambre ${r.numero}`}
+                    src={r.chambre.image}
+                    alt={`Chambre ${r.chambre?.numero || ""}`}
                     style={{
                       marginTop: "10px",
                       width: "130px",
@@ -244,36 +256,20 @@ function TableauProprietaire({ onglet }) {
                     }}
                   />
                 )}
-                {/* ✅ Photo de l'étudiant à droite */}
-                {r.image && (
-                    <img
-                      src={r.photoProfil } 
-                      alt="Étudiant"
-                      style={{
-                        float: "right",
-                        marginTop: "10px",
-                        width: "130px",
-                        height: "140px",
-                        objectFit: "cover",
-                        borderRadius: "12px",
-                        boxShadow: "0 0 5px rgba(0,0,0,0.2)",
-                      }}
-                   />
-                )}
 
                 {/* Boutons d'action dans la liste */}
                 <div className="mt-4 flex gap-2">
-                  {r.statut !== "confirmée" && (
+                  {(r.statut || r.status) !== "confirmée" && (
                     <button
                       className="bg-green-600 text-white px-3 py-1 rounded"
-                      onClick={() => confirmerReservation(r.id)}
+                      onClick={() => confirmerReservation(r._id)}
                     >
                       Confirmer
                     </button>
                   )}
                   <button
                     className="bg-red-600 text-white px-3 py-1 rounded"
-                    onClick={() => supprimerReservation(r.id, r.numero, r.bloc)}
+                    onClick={() => supprimerReservation(r._id)}
                   >
                     Supprimer
                   </button>

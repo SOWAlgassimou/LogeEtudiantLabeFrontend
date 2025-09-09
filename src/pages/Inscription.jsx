@@ -1,32 +1,26 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BarreNavigation from "../composants/BarreNavigation";
+import { register } from "../api/auth";
 
 function Inscription() {
   const [nom, setNom] = useState("");
   const [email, setEmail] = useState("");
-  const [motDePasse, setMotDePasse] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState("etudiant");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const navigate = useNavigate();
 
-  const gererInscription = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-
-    const nouveauxUtilisateurs = JSON.parse(localStorage.getItem("utilisateurs")) || [];
-
-    const existe = nouveauxUtilisateurs.find((u) => u.email === email);
-    if (existe) {
-      alert("❌ Cet email est déjà utilisé.");
-      return;
+    try {
+      await register({ nom, email, password, role });
+      setSuccess("Inscription réussie ! Vérifiez votre email.");
+      setTimeout(() => navigate("/connexion"), 2000);
+    } catch (err) {
+      setError("Erreur lors de l'inscription. Email déjà utilisé ?");
     }
-
-    const nouvelUtilisateur = { nom, email, motDePasse, role };
-    const maj = [...nouveauxUtilisateurs, nouvelUtilisateur];
-
-    localStorage.setItem("utilisateurs", JSON.stringify(maj));
-    localStorage.setItem("utilisateurConnecte", JSON.stringify(nouvelUtilisateur));
-
-    navigate(role === "etudiant" ? "/etudiant" : "/proprietaire");
   };
 
   return (
@@ -34,7 +28,7 @@ function Inscription() {
       <BarreNavigation />
       <main className="flex justify-center items-center min-h-screen bg-gray-50">
         <form
-          onSubmit={gererInscription}
+          onSubmit={handleSubmit}
           className="bg-white shadow-md p-8 rounded-md w-full max-w-md"
         >
           <h2 className="text-2xl font-bold mb-6 text-center">Inscription</h2>
@@ -65,8 +59,8 @@ function Inscription() {
             Mot de passe :
             <input
               type="password"
-              value={motDePasse}
-              onChange={(e) => setMotDePasse(e.target.value)}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
               className="w-full border px-3 py-2 mt-1 rounded"
             />
@@ -83,6 +77,9 @@ function Inscription() {
               <option value="proprietaire">Propriétaire</option>
             </select>
           </label>
+
+          {error && <p className="text-red-500">{error}</p>}
+          {success && <p className="text-green-600">{success}</p>}
 
           <button
             type="submit"

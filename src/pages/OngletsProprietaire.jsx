@@ -1,6 +1,7 @@
 import { useState } from "react";
 import TableauProprietaire from "./TableauProprietaire";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 export default function OngletsProprietaire() {
   const [onglet, setOnglet] = useState(null);
@@ -8,12 +9,12 @@ export default function OngletsProprietaire() {
   const [showConfirm, setShowConfirm] = useState(false);
   const utilisateur = JSON.parse(localStorage.getItem("utilisateurConnecte"));
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   // Pour la déconnexion
   const handleLogout = () => {
     setShowConfirm(false);
-    localStorage.removeItem("utilisateurConnecte");
-    window.location.href = "/";
+    logout();
   };
 
   return (

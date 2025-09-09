@@ -1,48 +1,32 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import BarreNavigation from "../composants/BarreNavigation";
+import { getChambreById } from "../api/chambres";
+import { createReservation } from "../api/reservations";
 
 function DetailChambre() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [chambre, setChambre] = useState(null);
-  const utilisateur = JSON.parse(localStorage.getItem("utilisateurConnecte"));
 
   useEffect(() => {
-    const chambres = JSON.parse(localStorage.getItem("chambres")) || [];
-    const trouvée = chambres.find((ch) => ch.id.toString() === id);
-    setChambre(trouvée);
+    let ignore = false;
+    getChambreById(id)
+      .then((data) => {
+        if (!ignore) setChambre(data);
+      })
+      .catch(() => {});
+    return () => { ignore = true; };
   }, [id]);
 
-  const reserverChambre = () => {
-    const reservations = JSON.parse(localStorage.getItem("reservations")) || [];
-    const dejaReserve = reservations.some((r) => r.email === utilisateur?.email);
-
-    if (dejaReserve) {
-      alert("❌ Vous avez déjà une réservation en cours.");
-      return;
+  const reserverChambre = async () => {
+    try {
+      await createReservation({ chambreId: id });
+      alert("✅ Chambre réservée avec succès !");
+      navigate("/etudiant");
+    } catch (e) {
+      alert(e?.response?.data?.message || "Impossible de réserver cette chambre.");
     }
-
-    // 1. Mettre à jour l’état de la chambre
-    const chambres = JSON.parse(localStorage.getItem("chambres")) || [];
-    const misesAJour = chambres.map((ch) =>
-      ch.id.toString() === id ? { ...ch, disponible: false } : ch
-    );
-    localStorage.setItem("chambres", JSON.stringify(misesAJour));
-
-    // 2. Enregistrer la réservation
-    const nouvelleReservation = {
-      ...chambre,
-      date: new Date(),
-      email: utilisateur?.email,
-      nom: utilisateur?.nom,
-      photoProfil: utilisateur?.image || "", // ✅ nouvelle propriété pour la photo de l'étudiant
-    };
-    const nouvelles = [...reservations, nouvelleReservation];
-    localStorage.setItem("reservations", JSON.stringify(nouvelles));
-
-    alert("✅ Chambre réservée avec succès !");
-    navigate("/etudiant");
   };
 
   if (!chambre) return <div className="p-6">Chargement...</div>;
@@ -65,14 +49,17 @@ function DetailChambre() {
         <p className="mt-2">
           <strong>Prix :</strong> {chambre.prix.toLocaleString()} GNF / mois
         </p>
-        <p>
-          <strong>Statut :</strong>{" "}
-          {chambre.disponible ? (
-            <span className="text-green-600">Disponible</span>
-          ) : (
-            <span className="text-red-600">Réservée</span>
-          )}
-        </p>
+        {/* Statut optionnel si fourni par l'API */}
+        {typeof chambre.disponible !== 'undefined' && (
+          <p>
+            <strong>Statut :</strong>{" "}
+            {chambre.disponible ? (
+              <span className="text-green-600">Disponible</span>
+            ) : (
+              <span className="text-red-600">Réservée</span>
+            )}
+          </p>
+        )}
 
         {chambre.equipements && (
           <ul className="mt-2 list-disc list-inside text-gray-700">

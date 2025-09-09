@@ -15,6 +15,7 @@ import ReservationsEtudiant from "./pages/ReservationsEtudiant";
 import OngletsEtudiant from "./pages/OngletsEtudiant";
 import OngletsProprietaire from "./pages/OngletsProprietaire";
 import ProfilUtilisateur from "./pages/ProfilUtilisateur";
+import ProtectedRoute from "./routes/ProtectedRoute";
 
 
 function App() {
@@ -24,13 +25,26 @@ function App() {
         <Route path="/" element={<Accueil />} />
         <Route path="/connexion" element={<Connexion />} />
         <Route path="/inscription" element={<Inscription />} />
-        {/* Routes sous layout privé */}
-        <Route element={<Prive />}>
-          <Route path="/etudiant" element={<OngletsEtudiant />} />
-          <Route path="/proprietaire" element={<OngletsProprietaire />} />
-          <Route path="/chambre/:id" element={<DetailChambre />} />
-          <Route path="/etudiant/reservations" element={<ReservationsEtudiant />} />
-          <Route path="/profil" element={<ProfilUtilisateur />} />
+        {/* Routes sous layout privé protégées */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<Prive />}>
+            <Route path="/chambre/:id" element={<DetailChambre />} />
+            <Route path="/profil" element={<ProfilUtilisateur />} />
+          </Route>
+        </Route>
+
+        {/* Groupes par rôle */}
+        <Route element={<ProtectedRoute roles={["etudiant"]} />}>
+          <Route element={<Prive />}>
+            <Route path="/etudiant" element={<OngletsEtudiant />} />
+            <Route path="/etudiant/reservations" element={<ReservationsEtudiant />} />
+          </Route>
+        </Route>
+
+        <Route element={<ProtectedRoute roles={["proprietaire"]} />}>
+          <Route element={<Prive />}>
+            <Route path="/proprietaire" element={<OngletsProprietaire />} />
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>

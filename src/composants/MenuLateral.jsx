@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 
 function MenuLateral({ role }) {
+  const { logout } = useAuth();
   return (
     <aside className="w-64 bg-white shadow-md p-4 hidden md:block h-screen">
       <h2 className="text-lg font-semibold mb-6">Tableau de bord</h2>
@@ -30,13 +32,12 @@ function MenuLateral({ role }) {
           </Link>
         )}
 
-        <a
-          href="/connexion"
-          onClick={() => localStorage.removeItem("utilisateurConnecte")}
+        <button
+          onClick={logout}
           className="text-red-600 hover:underline block mt-6"
         >
           Se déconnecter
-        </a>
+        </button>
       </nav>
     </aside>
   );

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TableauEtudiant from "./TableauEtudiant";
 import ReservationsEtudiant from "./ReservationsEtudiant";
+import { useAuth } from "../context/AuthContext";
 
 export default function OngletsEtudiant() {
   const [onglet, setOnglet] = useState(null);
@@ -9,12 +10,11 @@ export default function OngletsEtudiant() {
   const [showConfirm, setShowConfirm] = useState(false);
   const utilisateur = JSON.parse(localStorage.getItem("utilisateurConnecte"));
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
     setShowConfirm(false);
-    localStorage.removeItem("utilisateurConnecte");
-    // Ajoute ici d'autres nettoyages si besoin
-    navigate("/");
+    logout();
   };
 
   return (

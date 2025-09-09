@@ -1,50 +1,56 @@
 import { useState, useEffect } from "react";
 import BarreNavigation from "../composants/BarreNavigation";
+import { useAuth } from "../context/AuthContext";
+import { getUserById, updateUser } from "../api/users";
 
 function ProfilUtilisateur() {
   const [utilisateur, setUtilisateur] = useState({});
   const [edition, setEdition] = useState(false);
   const [formulaire, setFormulaire] = useState({ nom: "", email: "", image: "" });
+  const [message, setMessage] = useState("");
+  const { user, setUser, logout } = useAuth();
 
   useEffect(() => {
-    const u = JSON.parse(localStorage.getItem("utilisateurConnecte"));
-    setUtilisateur(u);
-    setFormulaire({ nom: u.nom, email: u.email, image: u.image || "" });
-  }, []);
+    let ignore = false;
+    if (!user?._id) return;
+    getUserById(user._id)
+      .then((data) => {
+        if (ignore) return;
+        setUtilisateur(data);
+        setFormulaire({ nom: data.nom || "", email: data.email || "", image: data.image || "" });
+      })
+      .catch(() => {});
+    return () => { ignore = true; };
+  }, [user?._id]);
 
   const handleImageChange = (e) => {
     const fichier = e.target.files[0];
-    const lecteur = new FileReader();
-    lecteur.onloadend = () => {
-      console.log("Image chargée :", lecteur.result); // ✅ test
-      setFormulaire({ ...formulaire, image: lecteur.result });
-    };
-    if (fichier) lecteur.readAsDataURL(fichier);
+    if (fichier) {
+      setFormulaire({ ...formulaire, image: fichier });
+    }
   };
 
-  const enregistrerModifs = () => {
-    console.log("Enregistrement en cours..."); // ✅ test
-    const nouveaux = { ...utilisateur, ...formulaire };
-    setUtilisateur(nouveaux);
-    localStorage.setItem("utilisateurConnecte", JSON.stringify(nouveaux));
-
-    // Mettre à jour dans la liste globale des utilisateurs
-    const tous = JSON.parse(localStorage.getItem("utilisateurs")) || [];
-    const maj = tous.map((u) =>
-      u.email === utilisateur.email ? { ...u, ...formulaire } : u
-    );
-    localStorage.setItem("utilisateurs", JSON.stringify(maj));
-
-    setEdition(false);
-
-    // Mettre à jour les réservations liées à cet utilisateur
-      const toutesReservations = JSON.parse(localStorage.getItem("reservations")) || [];
-      const majReservations = toutesReservations.map((r) =>
-        r.email === utilisateur.email
-      ? { ...r, nom: formulaire.nom, email: formulaire.email, photoProfil: formulaire.image }
-      : r
-    );
-    localStorage.setItem("reservations", JSON.stringify(majReservations));
+  const enregistrerModifs = async () => {
+    try {
+      let payload;
+      if (formulaire.image instanceof File) {
+        payload = new FormData();
+        payload.append('nom', formulaire.nom);
+        payload.append('email', formulaire.email);
+        payload.append('image', formulaire.image);
+      } else {
+        payload = { nom: formulaire.nom, email: formulaire.email };
+      }
+      const updated = await updateUser(user._id, payload);
+      setUtilisateur(updated);
+      setUser(updated);
+      setEdition(false);
+      setMessage("✅ Profil mis à jour.");
+      setTimeout(() => setMessage(""), 2500);
+    } catch (e) {
+      setMessage(e?.response?.data?.message || "❌ Erreur lors de la mise à jour du profil.");
+      setTimeout(() => setMessage(""), 3500);
+    }
   };
 
   return (
@@ -62,6 +68,7 @@ function ProfilUtilisateur() {
           {/* Titre */}
           <h2 className="text-2xl font-bold text-blue-700 mb-6">Mon Profil</h2>
 
+          {message && <div className="mb-4 text-center font-semibold">{message}</div>}
           {/* Formulaire ou affichage */}
           {edition ? (
             <div className="w-full space-y-4 text-gray-800 text-lg">
@@ -110,10 +117,7 @@ function ProfilUtilisateur() {
 
           {/* Déconnexion */}
           <button
-            onClick={() => {
-              localStorage.removeItem("utilisateurConnecte");
-              window.location.href = "/connexion";
-            }}
+            onClick={logout}
             className="mt-6 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded shadow"
           >
             Se déconnecter

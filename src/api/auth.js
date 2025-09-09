@@ -1,21 +1,18 @@
-import axios from "axios";
+import { http } from "./http";
 
-const API_URL = "http://localhost:5000/api/auth";
+const API_PREFIX = "/auth"; // baseURL already includes /api
 
 export async function login(email, password) {
-  const res = await axios.post(`${API_URL}/login`, { email, password });
-  return res.data; // { token, user }
+  const { data } = await http.post(`${API_PREFIX}/login`, { email, password });
+  return data; // { token, user }
 }
 
-export async function register(data) {
-  const res = await axios.post(`${API_URL}/register`, data);
-  return res.data;
+export async function register(payload) {
+  const { data } = await http.post(`${API_PREFIX}/register`, payload);
+  return data;
 }
 
 export async function verifyEmail(token) {
-  const res = await axios.get(`${API_URL}/verify-email?token=${token}`);
-  return res.data;
+  const { data } = await http.get(`${API_PREFIX}/verify-email`, { params: { token } });
+  return data;
 }
-
-const token = localStorage.getItem("token");
-localStorage.setItem("token", token);

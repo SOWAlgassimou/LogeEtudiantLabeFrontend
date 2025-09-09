@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import BarreNavigation from "../composants/BarreNavigation";
-import { getReservations } from "../api/reservations";
+import { getReservations, deleteReservation as apiDeleteReservation } from "../api/reservations";
 import jsPDF from "jspdf";
 
 function ReservationsEtudiant() {
@@ -8,46 +8,37 @@ function ReservationsEtudiant() {
   const utilisateur = JSON.parse(localStorage.getItem("utilisateurConnecte"));
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    getReservations(token).then(setReservations);
+    getReservations().then((data) => setReservations(Array.isArray(data) ? data : []));
   }, []);
 
-  const annulerReservation = (idChambre) => {
-    // 1. Supprimer réservation
-    const nouvellesReservations = reservations.filter((r) => r.id !== idChambre);
-    const toutes = JSON.parse(localStorage.getItem("reservations")) || [];
-    const majGlobales = toutes.filter((r) => r.id !== idChambre);
-    localStorage.setItem("reservations", JSON.stringify(majGlobales));
-    setReservations(nouvellesReservations);
-
-    // 2. Remettre chambre à dispo
-    const chambres = JSON.parse(localStorage.getItem("chambres")) || [];
-    const misesAJour = chambres.map((ch) =>
-      ch.id === idChambre ? { ...ch, disponible: true } : ch
-    );
-    localStorage.setItem("chambres", JSON.stringify(misesAJour));
+  const annulerReservation = async (reservationId) => {
+    try {
+      await apiDeleteReservation(reservationId);
+      setReservations((prev) => prev.filter((r) => (r._id || r.id) !== reservationId));
+    } catch (_) {
+      // Optionnel: afficher un message d'erreur
+    }
   };
 
   const telechargerRecu = (reservation) => {
     const doc = new jsPDF();
+    const chambre = reservation.chambre || {};
+    const numero = reservation.numero || chambre.numero || "";
+    const bloc = reservation.bloc || chambre.bloc || "";
+    const prixVal = reservation.prix ?? chambre.prix ?? 0;
+    const dateVal = reservation.date || reservation.createdAt || Date.now();
+    const emailVal = reservation.email || utilisateur?.email || (reservation.user && reservation.user.email) || "";
+
     doc.setFontSize(14);
     doc.text("Reçu de réservation – Plateforme Logement", 20, 20);
     doc.text(`Nom : ${utilisateur.nom}`, 20, 40);
-    doc.text(`Email : ${utilisateur.email}`, 20, 50);
-    doc.text(`Chambre : ${reservation.numero} – ${reservation.bloc}`, 20, 60);
-    doc.text(
-      `Prix : ${reservation.prix.toLocaleString()} GNF / mois`,
-      20,
-      70
-    );
-    doc.text(
-      `Date : ${new Date(reservation.date).toLocaleDateString()}`,
-      20,
-      80
-    );
+    doc.text(`Email : ${emailVal}`, 20, 50);
+    doc.text(`Chambre : ${numero} – ${bloc}`, 20, 60);
+    doc.text(`Prix : ${Number(prixVal).toLocaleString()} GNF / mois`, 20, 70);
+    doc.text(`Date : ${new Date(dateVal).toLocaleDateString()}`, 20, 80);
 
     doc.text("Merci d'avoir utilisé notre plateforme 🙏", 20, 100);
-    doc.save(`recu-${reservation.numero}-${reservation.bloc}.pdf`);
+    doc.save(`recu-${numero}-${bloc}.pdf`);
   };
 
   return (
@@ -62,7 +53,7 @@ function ReservationsEtudiant() {
           <ul className="space-y-4">
             {reservations.map((r, i) => (
               <li
-                key={i}
+                key={r._id || r.id || i}
                 className="bg-white p-4 rounded shadow flex flex-col sm:flex-row sm:items-start gap-4"
                >
                 {/* Infos à gauche */}
@@ -79,7 +70,7 @@ function ReservationsEtudiant() {
                       Reçu PDF
                     </button>
                     <button
-                      onClick={() => annulerReservation(r.id)}
+                      onClick={() => annulerReservation(r._id || r.id)}
                       className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
                     >  
                      Annuler
