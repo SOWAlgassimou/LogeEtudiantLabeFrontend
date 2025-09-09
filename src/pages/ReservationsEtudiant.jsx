@@ -8,7 +8,21 @@ function ReservationsEtudiant() {
   const utilisateur = JSON.parse(localStorage.getItem("utilisateurConnecte"));
 
   useEffect(() => {
-    getReservations().then((data) => setReservations(Array.isArray(data) ? data : []));
+    // Filtrer par utilisateur connecté
+    const params = utilisateur?._id ? { user: utilisateur._id } : {};
+    getReservations(params).then((data) => {
+      console.log("Utilisateur connecté ID:", utilisateur?._id);
+      console.log("Données réservations reçues:", data);
+      const reservationsList = data?.reservations || data || [];
+      // Filtrer côté client si nécessaire
+      const mesReservations = reservationsList.filter(r => 
+        r.etudiant?._id === utilisateur?._id || r.etudiant === utilisateur?._id || 
+        r.user?._id === utilisateur?._id || r.user === utilisateur?._id
+      );
+      console.log("Mes réservations filtrées:", mesReservations);
+      console.log("Statuts des réservations:", mesReservations.map(r => r.statut));
+      setReservations(Array.isArray(mesReservations) ? mesReservations : []);
+    });
   }, []);
 
   const annulerReservation = async (reservationId) => {
@@ -47,21 +61,21 @@ function ReservationsEtudiant() {
       <main className="max-w-5xl mx-auto px-6 py-10">
         <h2 className="text-2xl font-bold mb-6">Mes Réservations</h2>
 
-        {reservations.length === 0 ? (
+        {reservations.filter(r => r.statut !== "annulée" && r.statut !== "annulée").length === 0 ? (
           <p>Aucune chambre réservée pour le moment.</p>
         ) : (
           <ul className="space-y-4">
-            {reservations.map((r, i) => (
+            {reservations.filter(r => r.statut !== "annulée" && r.statut !== "annulée").map((r, i) => (
               <li
                 key={r._id || r.id || i}
                 className="bg-white p-4 rounded shadow flex flex-col sm:flex-row sm:items-start gap-4"
                >
                 {/* Infos à gauche */}
                 <div className="flex-1">
-                  <p><strong>Bloc :</strong> {r.bloc} — <strong>Chambre :</strong> {r.numero}</p>
-                  <p><strong>Prix :</strong> {r.prix.toLocaleString()} GNF / mois</p>
-                  <p><strong>Date :</strong> {new Date(r.date).toLocaleDateString()}</p>
-                  <p><strong>Email :</strong> {r.email}</p>
+                  <p><strong>Bloc :</strong> {r.chambre?.bloc || r.bloc} — <strong>Chambre :</strong> {r.chambre?.numero || r.numero}</p>
+                  <p><strong>Prix :</strong> {Number(r.chambre?.prix || r.prix || 0).toLocaleString()} GNF / mois</p>
+                  <p><strong>Date :</strong> {new Date(r.createdAt || r.date).toLocaleDateString()}</p>
+                  <p><strong>Email :</strong> {r.user?.email || r.email || utilisateur?.email}</p>
                   <div className="mt-3 space-x-2">
                     <button
                       onClick={() => telechargerRecu(r)}
@@ -79,10 +93,10 @@ function ReservationsEtudiant() {
                 </div>
 
                 {/* Image à droite */}
-                {r.image && (
+                {(r.chambre?.image || r.image) && (
                   <div className="w-full sm:w-40 shrink-0">
                     <img
-                      src={r.image}
+                      src={r.chambre?.image || r.image}
                       alt="Chambre"
                       className="w-full h-28 object-cover rounded"
                       style={{ maxHeight: "130px" }}

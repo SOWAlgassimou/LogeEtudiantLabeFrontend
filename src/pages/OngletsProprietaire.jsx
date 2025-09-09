@@ -120,7 +120,7 @@ export default function OngletsProprietaire() {
 
       {/* Contenu des onglets */}
       <div>
-        {onglet && <TableauProprietaire onglet={onglet} />}
+        {onglet && <TableauProprietaire onglet={onglet} onSwitchToForm={() => setOnglet("formulaire")} />}
       </div>
     </div>
   );

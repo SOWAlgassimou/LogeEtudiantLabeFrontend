@@ -22,17 +22,14 @@ export async function getChambreById(id) {
 }
 
 export async function createChambre(payload) {
-  // Expect payload to be either plain JSON or FormData depending on backend
-  const isFormData = payload instanceof FormData;
-  const headers = isFormData ? { 'Content-Type': 'multipart/form-data' } : undefined;
-  const { data } = await http.post(API_PREFIX, payload, { headers });
+  // Pour FormData, laisser le navigateur gérer automatiquement le Content-Type
+  const { data } = await http.post(API_PREFIX, payload);
   return data;
 }
 
 export async function updateChambre(id, payload) {
-  const isFormData = payload instanceof FormData;
-  const headers = isFormData ? { 'Content-Type': 'multipart/form-data' } : undefined;
-  const { data } = await http.put(`${API_PREFIX}/${id}`, payload, { headers });
+  // Pour FormData, laisser le navigateur gérer automatiquement le Content-Type
+  const { data } = await http.put(`${API_PREFIX}/${id}`, payload);
   return data;
 }
 

@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { createChambre, getChambres, deleteChambre } from "../api/chambres"; // Ajout deleteChambre
+import { createChambre, getChambres, deleteChambre, updateChambre } from "../api/chambres";
 import { getOwnerReservations, validateOwnerReservation } from "../api/reservations";
 
-function TableauProprietaire({ onglet }) {
+function TableauProprietaire({ onglet, onSwitchToForm }) {
   const [chambres, setChambres] = useState([]);
   const [formulaire, setFormulaire] = useState({ bloc: "", numero: "", prix: "", image: "" });
   const [message, setMessage] = useState("");
@@ -29,7 +29,11 @@ function TableauProprietaire({ onglet }) {
     }
     if (onglet === "reservations") {
       getOwnerReservations()
-        .then((data) => setReservationsProprio(Array.isArray(data) ? data : []))
+        .then((data) => {
+          console.log("Réservations propriétaire reçues:", data);
+          const reservationsList = data?.reservations || data || [];
+          setReservationsProprio(Array.isArray(reservationsList) ? reservationsList : []);
+        })
         .catch(() => setMessage("Erreur lors du chargement des réservations."));
     }
   }, [onglet]);
@@ -78,20 +82,44 @@ function TableauProprietaire({ onglet }) {
     }
 
     try {
-      const formData = new FormData();
-      formData.append('bloc', bloc);
-      formData.append('numero', numero);
-      formData.append('prix', String(prix));
-      formData.append('proprietaire', utilisateur._id);
-      if (formulaire.image instanceof File) {
-        formData.append('image', formulaire.image);
+      if (modeEdition && chambreEnCours?._id) {
+        // Mode modification - utiliser JSON si pas de nouvelle image
+        if (formulaire.image instanceof File) {
+          const formData = new FormData();
+          formData.append('bloc', bloc);
+          formData.append('numero', numero);
+          formData.append('prix', String(prix));
+          formData.append('image', formulaire.image);
+          await updateChambre(chambreEnCours._id, formData);
+        } else {
+          // Pas de nouvelle image, envoyer en JSON
+          const payload = {
+            bloc,
+            numero,
+            prix
+          };
+          await updateChambre(chambreEnCours._id, payload);
+        }
+        setMessage("✅ Chambre modifiée.");
+      } else {
+        // Mode ajout - toujours FormData
+        const formData = new FormData();
+        formData.append('bloc', bloc);
+        formData.append('numero', numero);
+        formData.append('prix', String(prix));
+        formData.append('proprietaire', utilisateur._id);
+        if (formulaire.image instanceof File) {
+          formData.append('image', formulaire.image);
+        }
+        await createChambre(formData);
+        setMessage("✅ Chambre ajoutée.");
       }
-      await createChambre(formData);
+      
       // Recharge la liste depuis l'API
       getChambres().then((data) => setChambres(Array.isArray(data) ? data : []));
-      setMessage("✅ Chambre ajoutée.");
     } catch (err) {
-      setMessage("❌ Erreur lors de l'ajout : " + (err?.response?.data?.error || err.message));
+      const action = modeEdition ? "modification" : "ajout";
+      setMessage(`❌ Erreur lors de la ${action} : ` + (err?.response?.data?.error || err.message));
     }
 
     resetFormulaire();
@@ -99,17 +127,24 @@ function TableauProprietaire({ onglet }) {
   };
 
   const modifierChambre = (ch) => {
-    setFormulaire({ bloc: ch.bloc, numero: ch.numero, prix: ch.prix });
+    setFormulaire({ bloc: ch.bloc, numero: ch.numero, prix: ch.prix, image: "" });
     setModeEdition(true);
     setChambreEnCours(ch);
+    // Basculer vers l'onglet formulaire pour voir la modification
+    if (onSwitchToForm) {
+      onSwitchToForm();
+    }
   };
 
   const supprimerChambre = async (id) => {
     try {
+      console.log("Suppression de la chambre ID:", id);
       await deleteChambre(id);
+      console.log("Chambre supprimée avec succès");
       getChambres().then((data) => setChambres(Array.isArray(data) ? data : []));
       setMessage("✅ Chambre supprimée.");
-    } catch {
+    } catch (error) {
+      console.error("Erreur suppression:", error);
       setMessage("❌ Erreur lors de la suppression.");
     }
     setTimeout(() => setMessage(""), 3000);
@@ -121,19 +156,30 @@ function TableauProprietaire({ onglet }) {
   // Confirmer une réservation (API propriétaire)
   async function confirmerReservation(id) {
     try {
-      await validateOwnerReservation(id);
+      await validateOwnerReservation(id, { statut: "confirmée" });
       setMessageAction("✅ Réservation confirmée !");
       const data = await getOwnerReservations();
-      setReservationsProprio(Array.isArray(data) ? data : []);
+      const reservationsList = data?.reservations || data || [];
+      setReservationsProprio(Array.isArray(reservationsList) ? reservationsList : []);
     } catch (e) {
+      console.error("Erreur confirmation:", e);
       setMessageAction("❌ Erreur lors de la confirmation.");
     }
     setTimeout(() => setMessageAction(""), 2500);
   }
 
-  // Suppression d'une réservation côté propriétaire (si API disponible)
-  function supprimerReservation(id) {
-    setMessageAction("Fonction de suppression non disponible.");
+  // Suppression d'une réservation côté propriétaire
+  async function supprimerReservation(id) {
+    try {
+      await validateOwnerReservation(id, { statut: "annulée" });
+      setMessageAction("✅ Réservation supprimée !");
+      const data = await getOwnerReservations();
+      const reservationsList = data?.reservations || data || [];
+      setReservationsProprio(Array.isArray(reservationsList) ? reservationsList : []);
+    } catch (e) {
+      console.error("Erreur suppression:", e);
+      setMessageAction("❌ Erreur lors de la suppression.");
+    }
     setTimeout(() => setMessageAction(""), 2500);
   }
 

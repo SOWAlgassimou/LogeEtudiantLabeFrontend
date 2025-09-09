@@ -17,10 +17,10 @@ function TableauEtudiant() {
       <h2 className="text-2xl font-bold mb-4">Chambres disponibles</h2>
       {error && <p className="text-red-500">{error}</p>}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-        {chambres.length === 0 ? (
+        {chambres.filter(ch => ch.disponible !== false).length === 0 ? (
           <p>Aucune chambre disponible pour le moment.</p>
         ) : (
-          chambres.map((ch) => (
+          chambres.filter(ch => ch.disponible !== false).map((ch) => (
             <div
               key={ch._id}
               className="relative border rounded p-4 shadow hover:shadow-lg bg-white"
@@ -29,7 +29,9 @@ function TableauEtudiant() {
                 {ch.numero} – {ch.bloc}
               </h3>
               <p>Prix : {ch.prix.toLocaleString()} GNF / mois</p>
-              <p className="text-green-600">Statut : Disponible</p>
+              <p className={ch.disponible === false ? "text-red-600" : "text-green-600"}>
+                Statut : {ch.disponible === false ? "Réservée" : "Disponible"}
+              </p>
               {ch.image && (
                 <img
                   src={ch.image}

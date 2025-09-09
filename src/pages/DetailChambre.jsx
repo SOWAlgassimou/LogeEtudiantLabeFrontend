@@ -21,7 +21,7 @@ function DetailChambre() {
 
   const reserverChambre = async () => {
     try {
-      await createReservation({ chambreId: id });
+      await createReservation({ chambre: id });
       alert("✅ Chambre réservée avec succès !");
       navigate("/etudiant");
     } catch (e) {
