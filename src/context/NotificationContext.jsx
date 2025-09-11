@@ -45,8 +45,8 @@ export function NotificationProvider({ children }) {
       
       loadNotifications();
       
-      // Vérifier les nouvelles notifications toutes les 2 secondes
-      const interval = setInterval(loadNotifications, 2000);
+      // Vérifier les nouvelles notifications toutes les 10 secondes
+      const interval = setInterval(loadNotifications, 10000);
       return () => clearInterval(interval);
     }
   }, []);

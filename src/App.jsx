@@ -4,6 +4,8 @@ import viteLogo from '/vite.svg'
 import './App.css'
 import './index.css'
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import { NotificationProvider } from "./context/NotificationContext";
 import Accueil from "./pages/Accueil";
 import Connexion from "./pages/Connexion";
 import Inscription from "./pages/Inscription";
@@ -15,13 +17,18 @@ import ReservationsEtudiant from "./pages/ReservationsEtudiant";
 import OngletsEtudiant from "./pages/OngletsEtudiant";
 import OngletsProprietaire from "./pages/OngletsProprietaire";
 import ProfilUtilisateur from "./pages/ProfilUtilisateur";
+import Messages from "./pages/Messages";
+import Notifications from "./pages/Notifications";
+import DashboardAdmin from "./pages/DashboardAdmin";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <AuthProvider>
+      <NotificationProvider>
+        <BrowserRouter>
+          <Routes>
         <Route path="/" element={<Accueil />} />
         <Route path="/connexion" element={<Connexion />} />
         <Route path="/inscription" element={<Inscription />} />
@@ -30,6 +37,8 @@ function App() {
           <Route element={<Prive />}>
             <Route path="/chambre/:id" element={<DetailChambre />} />
             <Route path="/profil" element={<ProfilUtilisateur />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/notifications" element={<Notifications />} />
           </Route>
         </Route>
 
@@ -46,8 +55,16 @@ function App() {
             <Route path="/proprietaire" element={<OngletsProprietaire />} />
           </Route>
         </Route>
-      </Routes>
-    </BrowserRouter>
+
+        <Route element={<ProtectedRoute roles={["admin"]} />}>
+          <Route element={<Prive />}>
+            <Route path="/admin" element={<DashboardAdmin />} />
+          </Route>
+        </Route>
+          </Routes>
+        </BrowserRouter>
+      </NotificationProvider>
+    </AuthProvider>
   );
 }
 

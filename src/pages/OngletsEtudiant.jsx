@@ -1,21 +1,48 @@
-import { useState } from "react";
+import { useState, useCallback, useMemo, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import TableauEtudiant from "./TableauEtudiant";
 import ReservationsEtudiant from "./ReservationsEtudiant";
+import MessagesAmeliore from "./MessagesAmeliore";
+import Notifications from "./Notifications";
+import ProfilUtilisateur from "./ProfilUtilisateur";
+import TabButton from "../composants/TabButton";
 import { useAuth } from "../context/AuthContext";
+import { useNotifications } from "../context/NotificationContext";
 
-export default function OngletsEtudiant() {
+const ProfilContent = memo(() => {
+  return <ProfilUtilisateur />;
+});
+
+function OngletsEtudiant() {
   const [onglet, setOnglet] = useState(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const utilisateur = JSON.parse(localStorage.getItem("utilisateurConnecte"));
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const { getUnreadCount } = useNotifications();
+  
+  const utilisateur = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("utilisateurConnecte"));
+    } catch {
+      return null;
+    }
+  }, []);
+  
+  const unreadCount = useMemo(() => getUnreadCount(), [getUnreadCount]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     setShowConfirm(false);
     logout();
-  };
+  }, [logout]);
+
+  const handleTabClick = useCallback((tab) => {
+    setOnglet(tab);
+  }, []);
+
+  const toggleMenu = useCallback(() => {
+    setMenuOuvert(v => !v);
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto p-6 relative">
@@ -23,7 +50,7 @@ export default function OngletsEtudiant() {
       {utilisateur && (
         <div className="absolute top-4 right-6">
           <button
-            onClick={() => setMenuOuvert((v) => !v)}
+            onClick={toggleMenu}
             className="flex items-center gap-2 bg-green-100 px-3 py-1 rounded shadow hover:bg-green-200"
           >
             <span className="font-semibold text-green-700">
@@ -75,21 +102,18 @@ export default function OngletsEtudiant() {
       )}
 
       {/* Onglets avec logos */}
-      <div className="flex justify-center mb-10 gap-16">
-        <div
-          className={`flex flex-col items-center cursor-pointer p-6 bg-white rounded shadow transition-all duration-200 hover:shadow-2xl hover:bg-blue-50 ${onglet === "chambres" ? "ring-2 ring-blue-400" : ""}`}
-          onClick={() => setOnglet("chambres")}
-          style={{ minWidth: 200 }}
-        >
-          <img src="/logo-chambre.png" alt="Chambres" style={{ width: 90, height: 90 }} className="mb-4" />
-          <span className={`font-semibold text-xl ${onglet === "chambres" ? "text-blue-600 underline" : ""}`}>
-            Chambres disponibles
-          </span>
-        </div>
+      <div className="flex justify-center mb-10 gap-4 flex-wrap">
+        <TabButton
+          isActive={onglet === "chambres"}
+          onClick={() => handleTabClick("chambres")}
+          icon="/logo-chambre.png"
+          label="Chambres disponibles"
+          size="small"
+        />
         
         <div
           className={`flex flex-col items-center cursor-pointer p-6 bg-white rounded shadow transition-all duration-200 hover:shadow-2xl hover:bg-blue-50 ${onglet === "reservations" ? "ring-2 ring-blue-400" : ""}`}
-          onClick={() => setOnglet("reservations")}
+          onClick={() => handleTabClick("reservations")}
           style={{ minWidth: 200 }}
         >
           <img src="/logo-reservation.png" alt="Réservations" style={{ width: 90, height: 90 }} className="mb-4" />
@@ -99,20 +123,49 @@ export default function OngletsEtudiant() {
         </div>
 
         <div
-          className={`flex flex-col items-center cursor-pointer p-6 bg-white rounded shadow transition-all duration-200 hover:shadow-2xl hover:bg-blue-50 ${onglet === "profil" ? "ring-2 ring-blue-400" : ""}`}
-          onClick={() => navigate("/profil")}
+          className={`flex flex-col items-center cursor-pointer p-6 bg-white rounded shadow transition-all duration-200 hover:shadow-2xl hover:bg-blue-50 ${onglet === "messages" ? "ring-2 ring-blue-400" : ""}`}
+          onClick={() => handleTabClick("messages")}
           style={{ minWidth: 200 }}
         >
-          <img src="/logo-profil.png" alt="Profil" style={{ width: 90, height: 90 }} className="mb-4" />
-          <span className="font-semibold text-xl text-blue-600 hover:underline">
-            Mon Profil
+          <img src="/logo-reservation.png" alt="Messages" style={{ width: 90, height: 90 }} className="mb-4" />
+          <span className={`font-semibold text-xl ${onglet === "messages" ? "text-blue-600 underline" : ""}`}>
+            Messages
           </span>
-        </div>  
+        </div>
+        <div
+          className={`flex flex-col items-center cursor-pointer p-6 bg-white rounded shadow transition-all duration-200 hover:shadow-2xl hover:bg-blue-50 ${onglet === "notifications" ? "ring-2 ring-blue-400" : ""}`}
+          onClick={() => handleTabClick("notifications")}
+          style={{ minWidth: 200 }}
+        >
+          <img src="/logo-chambre.png" alt="Notifications" style={{ width: 90, height: 90 }} className="mb-4" />
+          <div className="relative">
+            <span className={`font-semibold text-xl ${onglet === "notifications" ? "text-blue-600 underline" : ""}`}>
+              Notifications
+            </span>
+            {unreadCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {unreadCount}
+              </span>
+            )}
+          </div>
+        </div>
+        <TabButton
+          isActive={onglet === "profil"}
+          onClick={() => handleTabClick("profil")}
+          icon="/logo-profil.png"
+          label="Mon Profil"
+          size="small"
+        />  
       </div>
       <div>
         {onglet === "chambres" && <TableauEtudiant allerReservations={() => setOnglet("reservations")} />}
         {onglet === "reservations" && <ReservationsEtudiant />}
+        {onglet === "messages" && <MessagesAmeliore />}
+        {onglet === "notifications" && <Notifications onNavigateToMessages={() => setOnglet("messages")} />}
+        {onglet === "profil" && <ProfilContent />}
       </div>
     </div>
   );
 }
+
+export default memo(OngletsEtudiant);

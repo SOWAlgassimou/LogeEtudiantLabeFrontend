@@ -1,13 +1,28 @@
 import { useState } from "react";
 import TableauProprietaire from "./TableauProprietaire";
+import MessagesAmeliore from "./MessagesAmeliore";
+import Notifications from "./Notifications";
+import ProfilUtilisateur from "./ProfilUtilisateur";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+
+function ProfilContent() {
+  return <ProfilUtilisateur />;
+}
 
 export default function OngletsProprietaire() {
   const [onglet, setOnglet] = useState(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const utilisateur = JSON.parse(localStorage.getItem("utilisateurConnecte"));
+  const getUtilisateur = () => {
+    try {
+      const data = localStorage.getItem("utilisateurConnecte");
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  };
+  const utilisateur = getUtilisateur();
   const navigate = useNavigate();
   const { logout } = useAuth();
 
@@ -75,14 +90,14 @@ export default function OngletsProprietaire() {
       )}
 
       {/* Onglets avec logos */}
-      <div className="flex justify-center mb-10 gap-16">
+      <div className="flex justify-center mb-10 gap-4 flex-wrap">
         <div
-          className={`flex flex-col items-center cursor-pointer p-6 bg-white rounded shadow transition-all duration-200 hover:shadow-2xl hover:bg-blue-50 ${onglet === "formulaire" ? "ring-2 ring-blue-400" : ""}`}
+          className={`flex flex-col items-center cursor-pointer p-4 bg-white rounded shadow transition-all duration-200 hover:shadow-2xl hover:bg-blue-50 ${onglet === "formulaire" ? "ring-2 ring-blue-400" : ""}`}
           onClick={() => setOnglet("formulaire")}
-          style={{ minWidth: 200 }}
+          style={{ minWidth: 140, maxWidth: 160 }}
         >
-          <img src="/logo-add.jpg" alt="Ajouter" style={{ width: 90, height: 90 }} className="mb-4" />
-          <span className={`font-semibold text-xl ${onglet === "formulaire" ? "text-blue-600 underline" : ""}`}>
+          <img src="/logo-add.jpg" alt="Ajouter" style={{ width: 60, height: 60 }} className="mb-2" />
+          <span className={`font-semibold text-sm text-center ${onglet === "formulaire" ? "text-blue-600 underline" : ""}`}>
             Ajouter une chambre
           </span>
         </div>
@@ -107,12 +122,32 @@ export default function OngletsProprietaire() {
           </span>
         </div>
         <div
-          className={`flex flex-col items-center cursor-pointer p-6 bg-white rounded shadow transition-all duration-200 hover:shadow-2xl hover:bg-blue-50 ${onglet === "profil" ? "ring-2 ring-blue-400" : ""}`}
-          onClick={() => navigate("/profil")}
+          className={`flex flex-col items-center cursor-pointer p-6 bg-white rounded shadow transition-all duration-200 hover:shadow-2xl hover:bg-blue-50 ${onglet === "messages" ? "ring-2 ring-blue-400" : ""}`}
+          onClick={() => setOnglet("messages")}
           style={{ minWidth: 200 }}
         >
-          <img src="/logo-profil.png" alt="Profil" style={{ width: 90, height: 90 }} className="mb-4" />
-          <span className="font-semibold text-xl text-blue-600 hover:underline">
+          <img src="/logo-reservation.png" alt="Messages" style={{ width: 90, height: 90 }} className="mb-4" />
+          <span className={`font-semibold text-xl ${onglet === "messages" ? "text-blue-600 underline" : ""}`}>
+            Messages
+          </span>
+        </div>
+        <div
+          className={`flex flex-col items-center cursor-pointer p-6 bg-white rounded shadow transition-all duration-200 hover:shadow-2xl hover:bg-blue-50 ${onglet === "notifications" ? "ring-2 ring-blue-400" : ""}`}
+          onClick={() => setOnglet("notifications")}
+          style={{ minWidth: 200 }}
+        >
+          <img src="/logo-chambre.png" alt="Notifications" style={{ width: 90, height: 90 }} className="mb-4" />
+          <span className={`font-semibold text-xl ${onglet === "notifications" ? "text-blue-600 underline" : ""}`}>
+            Notifications
+          </span>
+        </div>
+        <div
+          className={`flex flex-col items-center cursor-pointer p-4 bg-white rounded shadow transition-all duration-200 hover:shadow-2xl hover:bg-blue-50 ${onglet === "profil" ? "ring-2 ring-blue-400" : ""}`}
+          onClick={() => setOnglet("profil")}
+          style={{ minWidth: 140, maxWidth: 160 }}
+        >
+          <img src="/logo-profil.png" alt="Profil" style={{ width: 60, height: 60 }} className="mb-2" />
+          <span className={`font-semibold text-sm text-center ${onglet === "profil" ? "text-blue-600 underline" : ""}`}>
             Mon Profil
           </span>
         </div>  
@@ -120,7 +155,11 @@ export default function OngletsProprietaire() {
 
       {/* Contenu des onglets */}
       <div>
-        {onglet && <TableauProprietaire onglet={onglet} onSwitchToForm={() => setOnglet("formulaire")} />}
+        {(onglet === "formulaire" || onglet === "liste" || onglet === "reservations") && 
+          <TableauProprietaire onglet={onglet} onSwitchToForm={() => setOnglet("formulaire")} />}
+        {onglet === "messages" && <MessagesAmeliore />}
+        {onglet === "notifications" && <Notifications onNavigateToMessages={() => setOnglet("messages")} />}
+        {onglet === "profil" && <ProfilContent />}
       </div>
     </div>
   );

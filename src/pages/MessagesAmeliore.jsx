@@ -114,7 +114,7 @@ function MessagesAmeliore() {
         };
         existingNotifs.unshift(newNotif);
         localStorage.setItem(notifKey, JSON.stringify(existingNotifs));
-        console.log('Notification créée pour:', nouveauMessage.destinataire, newNotif);
+
         
         // Créer aussi une notification pour l'expéditeur (pour test)
         addNotification({

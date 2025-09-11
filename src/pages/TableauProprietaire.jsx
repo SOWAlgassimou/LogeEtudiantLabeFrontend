@@ -6,17 +6,45 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
   const [chambres, setChambres] = useState([]);
   const [formulaire, setFormulaire] = useState({ bloc: "", numero: "", prix: "", image: "" });
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
   const [modeEdition, setModeEdition] = useState(false);
   const [chambreEnCours, setChambreEnCours] = useState(null);
   const [messageAction, setMessageAction] = useState("");
   const [reservationsProprio, setReservationsProprio] = useState([]);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [chambreSelectionnee, setChambreSelectionnee] = useState(null);
 
-  const utilisateur = JSON.parse(localStorage.getItem("utilisateurConnecte"));
+  const getUtilisateur = () => {
+    try {
+      const data = localStorage.getItem("utilisateurConnecte");
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  };
+  const utilisateur = getUtilisateur();
 
   const convertirImage = (e) => {
     const fichier = e.target.files[0];
     if (fichier) {
+      // Validation du fichier
+      if (fichier.size > 5 * 1024 * 1024) {
+        setMessage("❌ Image trop volumineuse (max 5MB)");
+        setTimeout(() => setMessage(""), 3000);
+        return;
+      }
+      if (!fichier.type.startsWith('image/')) {
+        setMessage("❌ Veuillez sélectionner une image valide");
+        setTimeout(() => setMessage(""), 3000);
+        return;
+      }
+      
       setFormulaire({ ...formulaire, image: fichier });
+      
+      // Créer un aperçu
+      const reader = new FileReader();
+      reader.onload = (e) => setImagePreview(e.target.result);
+      reader.readAsDataURL(fichier);
     }
   };
 
@@ -24,8 +52,17 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
     useEffect(() => {
     if (onglet === "liste") {
       getChambres()
-        .then((data) => setChambres(Array.isArray(data) ? data : []))
-        .catch(() => setMessage("Erreur lors du chargement des chambres."));
+        .then((data) => {
+          const allChambres = Array.isArray(data) ? data : data?.chambres || [];
+          // Filtrer seulement les chambres du propriétaire connecté
+          const mesChambres = allChambres.filter(ch => 
+            ch.proprietaire?._id === utilisateur?._id || ch.proprietaire === utilisateur?._id
+          );
+          setChambres(mesChambres);
+        })
+        .catch(err => {
+          setMessage("Erreur lors du chargement des chambres.");
+        });
     }
     if (onglet === "reservations") {
       getOwnerReservations()
@@ -39,13 +76,15 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
   }, [onglet]);
 
   const resetFormulaire = () => {
-    setFormulaire({ bloc: "", numero: "", prix: "" });
+    setFormulaire({ bloc: "", numero: "", prix: "", image: "" });
+    setImagePreview(null);
     setModeEdition(false);
     setChambreEnCours(null);
   };
 
   const gererSoumission = async (e) => {
     e.preventDefault();
+    setLoading(true);
     const bloc = formulaire.bloc.trim();
     const numero = formulaire.numero.trim();
     const prix = parseInt(formulaire.prix, 10);
@@ -116,7 +155,13 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
       }
       
       // Recharge la liste depuis l'API
-      getChambres().then((data) => setChambres(Array.isArray(data) ? data : []));
+      getChambres().then((data) => {
+        const allChambres = Array.isArray(data) ? data : data?.chambres || [];
+        const mesChambres = allChambres.filter(ch => 
+          ch.proprietaire?._id === utilisateur?._id || ch.proprietaire === utilisateur?._id
+        );
+        setChambres(mesChambres);
+      });
     } catch (err) {
       const action = modeEdition ? "modification" : "ajout";
       setMessage(`❌ Erreur lors de la ${action} : ` + (err?.response?.data?.error || err.message));
@@ -124,6 +169,7 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
 
     resetFormulaire();
     setTimeout(() => setMessage(""), 3000);
+    setLoading(false);
   };
 
   const modifierChambre = (ch) => {
@@ -141,7 +187,13 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
       console.log("Suppression de la chambre ID:", id);
       await deleteChambre(id);
       console.log("Chambre supprimée avec succès");
-      getChambres().then((data) => setChambres(Array.isArray(data) ? data : []));
+      getChambres().then((data) => {
+        const allChambres = Array.isArray(data) ? data : data?.chambres || [];
+        const mesChambres = allChambres.filter(ch => 
+          ch.proprietaire?._id === utilisateur?._id || ch.proprietaire === utilisateur?._id
+        );
+        setChambres(mesChambres);
+      });
       setMessage("✅ Chambre supprimée.");
     } catch (error) {
       console.error("Erreur suppression:", error);
@@ -171,11 +223,27 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
   // Suppression d'une réservation côté propriétaire
   async function supprimerReservation(id) {
     try {
+      // Trouver la réservation avant suppression pour récupérer l'ID de la chambre
+      const reservation = reservationsProprio.find(r => r._id === id);
+      const chambreId = reservation?.chambre?._id;
+      
       await validateOwnerReservation(id, { statut: "annulée" });
+      
+      // Remettre la chambre disponible si on a l'ID
+      if (chambreId) {
+        try {
+          await updateChambre(chambreId, { disponible: true });
+        } catch (err) {
+          console.log('Erreur mise à jour chambre:', err);
+        }
+      }
+      
       setMessageAction("✅ Réservation supprimée !");
-      const data = await getOwnerReservations();
-      const reservationsList = data?.reservations || data || [];
-      setReservationsProprio(Array.isArray(reservationsList) ? reservationsList : []);
+      // Supprimer immédiatement de la liste locale
+      setReservationsProprio(prev => prev.filter(r => r._id !== id));
+      // Déclencher les événements de mise à jour
+      window.dispatchEvent(new CustomEvent('chambreUpdate'));
+      window.dispatchEvent(new CustomEvent('reservationUpdate'));
     } catch (e) {
       console.error("Erreur suppression:", e);
       setMessageAction("❌ Erreur lors de la suppression.");
@@ -193,42 +261,102 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
           <h3 className="text-lg font-semibold mb-3">
             {modeEdition ? "Modifier une chambre" : "Ajouter une chambre"}
           </h3>
-          {message && <p className="mb-3 text-sm text-green-700">{message}</p>}
+          {message && (
+            <div className={`mb-3 p-3 rounded ${
+              message.includes('❌') ? 'bg-red-100 text-red-700 border border-red-300' : 
+              'bg-green-100 text-green-700 border border-green-300'
+            }`}>
+              {message}
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <input
-              type="text"
-              placeholder="Bloc (ex: Bloc A)"
-              value={formulaire.bloc}
-              onChange={(e) => setFormulaire({ ...formulaire, bloc: e.target.value })}
-              required
-              className="border p-2 rounded"
-            />
-            <input
-              type="text"
-              placeholder="Numéro (ex: C1)"
-              value={formulaire.numero}
-              onChange={(e) => setFormulaire({ ...formulaire, numero: e.target.value })}
-              required
-              className="border p-2 rounded"
-            />
-            <input
-              type="number"
-              placeholder="Prix en GNF" 
-              value={formulaire.prix}
-              onChange={(e) => setFormulaire({ ...formulaire, prix: e.target.value })}
-              required
-              className="border p-2 rounded"
-            />
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => convertirImage(e)}
-              className="border p-2 rounded"
-            />
+            <div>
+              <input
+                type="text"
+                placeholder="Bloc (ex: Bloc A)"
+                value={formulaire.bloc}
+                onChange={(e) => setFormulaire({ ...formulaire, bloc: e.target.value })}
+                required
+                className="border p-2 rounded w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              {formulaire.bloc && formulaire.bloc.length < 2 && (
+                <p className="text-red-500 text-xs mt-1">Le bloc doit contenir au moins 2 caractères</p>
+              )}
+            </div>
+            <div>
+              <input
+                type="text"
+                placeholder="Numéro (ex: C1)"
+                value={formulaire.numero}
+                onChange={(e) => setFormulaire({ ...formulaire, numero: e.target.value })}
+                required
+                className="border p-2 rounded w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              {formulaire.numero && formulaire.numero.length < 1 && (
+                <p className="text-red-500 text-xs mt-1">Le numéro est requis</p>
+              )}
+            </div>
+            <div>
+              <input
+                type="number"
+                placeholder="Prix en GNF" 
+                value={formulaire.prix}
+                onChange={(e) => setFormulaire({ ...formulaire, prix: e.target.value })}
+                required
+                min="1000"
+                className="border p-2 rounded w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              {formulaire.prix && parseInt(formulaire.prix) < 1000 && (
+                <p className="text-red-500 text-xs mt-1">Le prix doit être d'au moins 1000 GNF</p>
+              )}
+            </div>
+            <div className="col-span-full">
+              <label className="block text-sm font-medium mb-2">Image de la chambre</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => convertirImage(e)}
+                className="border p-2 rounded w-full"
+              />
+              {imagePreview && (
+                <div className="mt-2">
+                  <img 
+                    src={imagePreview} 
+                    alt="Aperçu" 
+                    className="w-32 h-32 object-cover rounded border"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => {setImagePreview(null); setFormulaire({...formulaire, image: ""})}}
+                    className="ml-2 text-red-600 text-sm hover:underline"
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           <div className="mt-4 flex gap-4">
-            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
-              {modeEdition ? "Modifier" : "Ajouter"}
+            <button 
+              type="submit" 
+              disabled={loading}
+              className={`px-4 py-2 rounded text-white ${
+                loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" strokeDasharray="32" strokeDashoffset="32">
+                      <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
+                      <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
+                    </circle>
+                  </svg>
+                  {modeEdition ? "Modification..." : "Ajout..."}
+                </span>
+              ) : (
+                modeEdition ? "Modifier" : "Ajouter"
+              )}
             </button>
             {modeEdition && (
               <button
@@ -244,7 +372,7 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
       )}
 
       {/* Onglet 2 : Liste des chambres */}
-      {onglet === "liste" && (
+      {onglet === "liste" && !chambreSelectionnee && (
         <ul className="space-y-2">
           {chambres.map((ch) => (
             <li
@@ -255,6 +383,9 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
                 {ch.bloc} – {ch.numero} | {ch.prix.toLocaleString()} GNF
               </span>
               <div className="space-x-2">
+                <button onClick={() => setChambreSelectionnee(ch)} className="text-green-600 hover:underline">
+                  Voir détail
+                </button>
                 <button onClick={() => modifierChambre(ch)} className="text-blue-600 hover:underline">
                   Modifier
                 </button>
@@ -265,6 +396,61 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Détail d'une chambre */}
+      {onglet === "liste" && chambreSelectionnee && (
+        <div className="max-w-3xl mx-auto p-6">
+          <button 
+            onClick={() => setChambreSelectionnee(null)}
+            className="mb-4 text-blue-600 hover:underline"
+          >
+            ← Retour à la liste
+          </button>
+          <div className="bg-white p-6 rounded shadow">
+            <h2 className="text-2xl font-bold mb-4">
+              Chambre {chambreSelectionnee.numero} – {chambreSelectionnee.bloc}
+            </h2>
+            {chambreSelectionnee.image && (
+              <img
+                src={`http://localhost:5000${chambreSelectionnee.image}`}
+                alt="Photo de la chambre"
+                className="w-full h-64 object-cover rounded mb-6"
+              />
+            )}
+            <p className="mb-2">
+              <strong>Prix :</strong> {chambreSelectionnee.prix.toLocaleString()} GNF / mois
+            </p>
+            <p className="mb-4">
+              <strong>Statut :</strong> 
+              <span className={chambreSelectionnee.disponible === false ? "text-red-600" : "text-green-600"}>
+                {chambreSelectionnee.disponible === false ? " Réservée" : " Disponible"}
+              </span>
+            </p>
+            <div className="space-x-2">
+              <button 
+                onClick={() => {
+                  modifierChambre(chambreSelectionnee);
+                  setChambreSelectionnee(null);
+                }}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              >
+                Modifier
+              </button>
+              <button 
+                onClick={() => {
+                  if (window.confirm('Êtes-vous sûr de vouloir supprimer cette chambre ?')) {
+                    supprimerChambre(chambreSelectionnee._id);
+                    setChambreSelectionnee(null);
+                  }
+                }}
+                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Onglet 3 : Réservations reçues */}
@@ -288,20 +474,7 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
                     {r.statut || r.status || "en attente"}
                   </span>
                 </p>
-                {r.chambre?.image && (
-                  <img
-                    src={r.chambre.image}
-                    alt={`Chambre ${r.chambre?.numero || ""}`}
-                    style={{
-                      marginTop: "10px",
-                      width: "130px",
-                      height: "140px",
-                      objectFit: "cover",
-                      borderRadius: "12px",
-                      boxShadow: "0 0 10px rgba(0,0,0,0.1)",
-                    }}
-                  />
-                )}
+
 
                 {/* Boutons d'action dans la liste */}
                 <div className="mt-4 flex gap-2">
@@ -315,7 +488,11 @@ function TableauProprietaire({ onglet, onSwitchToForm }) {
                   )}
                   <button
                     className="bg-red-600 text-white px-3 py-1 rounded"
-                    onClick={() => supprimerReservation(r._id)}
+                    onClick={() => {
+                      if (window.confirm('Êtes-vous sûr de vouloir supprimer cette réservation ?')) {
+                        supprimerReservation(r._id);
+                      }
+                    }}
                   >
                     Supprimer
                   </button>

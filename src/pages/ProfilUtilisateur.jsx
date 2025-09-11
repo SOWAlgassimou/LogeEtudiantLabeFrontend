@@ -55,7 +55,6 @@ function ProfilUtilisateur() {
 
   return (
     <div>
-      <BarreNavigation />
       <main className="max-w-3xl mx-auto px-6 py-10">
         <div className="flex flex-col items-center bg-white shadow-lg rounded-lg p-8">
           {/* Photo de profil */}

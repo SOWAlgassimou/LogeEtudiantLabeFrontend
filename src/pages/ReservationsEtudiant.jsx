@@ -5,24 +5,44 @@ import jsPDF from "jspdf";
 
 function ReservationsEtudiant() {
   const [reservations, setReservations] = useState([]);
-  const utilisateur = JSON.parse(localStorage.getItem("utilisateurConnecte"));
+  const getUtilisateur = () => {
+    try {
+      const data = localStorage.getItem("utilisateurConnecte");
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  };
+  const utilisateur = getUtilisateur();
+
+  const loadReservations = () => {
+    getReservations().then((data) => {
+      const reservationsList = data?.reservations || data || [];
+      // Filtrer par utilisateur connecté ET statut actif
+      const mesReservations = reservationsList.filter(r => {
+        const isMyReservation = r.etudiant?._id === utilisateur?._id || 
+                               r.etudiant === utilisateur?._id || 
+                               r.user?._id === utilisateur?._id || 
+                               r.user === utilisateur?._id;
+        const isActive = r.statut !== 'annulée';
+        return isMyReservation && isActive;
+      });
+      setReservations(mesReservations);
+    }).catch(err => {
+      console.error('Erreur chargement réservations:', err);
+    });
+  };
 
   useEffect(() => {
-    // Filtrer par utilisateur connecté
-    const params = utilisateur?._id ? { user: utilisateur._id } : {};
-    getReservations(params).then((data) => {
-      console.log("Utilisateur connecté ID:", utilisateur?._id);
-      console.log("Données réservations reçues:", data);
-      const reservationsList = data?.reservations || data || [];
-      // Filtrer côté client si nécessaire
-      const mesReservations = reservationsList.filter(r => 
-        r.etudiant?._id === utilisateur?._id || r.etudiant === utilisateur?._id || 
-        r.user?._id === utilisateur?._id || r.user === utilisateur?._id
-      );
-      console.log("Mes réservations filtrées:", mesReservations);
-      console.log("Statuts des réservations:", mesReservations.map(r => r.statut));
-      setReservations(Array.isArray(mesReservations) ? mesReservations : []);
-    });
+    loadReservations();
+    
+    // Écouter les événements de mise à jour
+    const handleUpdate = () => loadReservations();
+    window.addEventListener('reservationUpdate', handleUpdate);
+    
+    return () => {
+      window.removeEventListener('reservationUpdate', handleUpdate);
+    };
   }, []);
 
   const annulerReservation = async (reservationId) => {
@@ -57,15 +77,22 @@ function ReservationsEtudiant() {
 
   return (
     <div>
-      <BarreNavigation />
       <main className="max-w-5xl mx-auto px-6 py-10">
-        <h2 className="text-2xl font-bold mb-6">Mes Réservations</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold">Mes Réservations</h2>
+          <button 
+            onClick={loadReservations}
+            className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+          >
+            🔄 Actualiser
+          </button>
+        </div>
 
-        {reservations.filter(r => r.statut !== "annulée" && r.statut !== "annulée").length === 0 ? (
+        {reservations.length === 0 ? (
           <p>Aucune chambre réservée pour le moment.</p>
         ) : (
           <ul className="space-y-4">
-            {reservations.filter(r => r.statut !== "annulée" && r.statut !== "annulée").map((r, i) => (
+            {reservations.map((r, i) => (
               <li
                 key={r._id || r.id || i}
                 className="bg-white p-4 rounded shadow flex flex-col sm:flex-row sm:items-start gap-4"
@@ -96,7 +123,7 @@ function ReservationsEtudiant() {
                 {(r.chambre?.image || r.image) && (
                   <div className="w-full sm:w-40 shrink-0">
                     <img
-                      src={r.chambre?.image || r.image}
+                      src={`http://localhost:5000${r.chambre?.image || r.image}`}
                       alt="Chambre"
                       className="w-full h-28 object-cover rounded"
                       style={{ maxHeight: "130px" }}

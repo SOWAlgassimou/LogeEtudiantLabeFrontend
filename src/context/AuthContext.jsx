@@ -70,7 +70,7 @@ export function AuthProvider({ children }) {
     login,
     logout,
     hasRole,
-  }), [user, token]);
+  }), [user, token, isAuthenticated]);
 
   return (
     <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
